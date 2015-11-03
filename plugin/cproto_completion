@@ -73,15 +73,29 @@ function! Def_complete()
     if match(currBuff,".cpp") >= 0
         let buffname = substitute(currBuff,".cpp",".h","")
     elseif match(currBuff,".h") >= 0
-        let buffname = substitute(currBuff,".h",".cpp","")
+        let buffname = currBuff[:len(currBuff) - 3]
+        let buffname = buffname.".cpp"
     elseif match(currBuff, ".hpp") >= 0
         let buffname = substitute(currBuff,".hpp",".cpp","")
     else
         return -1
     endif
+    let splitpath = split(buffname,"/")
+    let buff = splitpath[len(splitpath) -1]
+    let path = splitpath[:len(splitpath) - 2]
+    let abs_path = ""
+    for fold in path
+        let abs_path = abs_path . "/" . fold
+    endfor
+    let file = 0
+    if len(splitpath) > 1
+        let file = globpath(abs_path,buff,'\n')
+    else
+        let file = globpath(".",buff,'\n')
+    endif
 
-    let file = globpath('.',buffname,'\n')
     if len(file) >= 1
+        echo "go here"
         let curline = getline(".")
         if bufname(buffname) == buffname
             call SetCurrentDef(currBuff, buffname, curline) 
@@ -91,7 +105,6 @@ function! Def_complete()
         endif
     else
         echo buffname." doesn't exist"
-        execute ":e ".buffname
     endif
 endfunction
 
