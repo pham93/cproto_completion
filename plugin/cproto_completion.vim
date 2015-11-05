@@ -142,7 +142,8 @@ function! GenerateClass(class_name, option)
     if a:option > 2
         return
     endif
-    let header_file_path = fnamemodify(a:class_name,":h")
+    let header_file_path = fnamemodify(a:class_name,":p:h")
+    echo header_file_path
     let header_name = fnamemodify(a:class_name,":t")
     let file = []
     if a:option == 1
