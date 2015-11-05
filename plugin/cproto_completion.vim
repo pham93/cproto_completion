@@ -4,6 +4,13 @@
 " IF a buffer is not in the buffer list, open it
 " Write the definition in it
 "
+if !exists("g:cproto_headers_path")
+    let g:cproto_headers_path = "headers"
+endif 
+if !exists("g:cproto_src_path")
+    let g:cproto_src_path = "src"
+endif
+
 function! SetCurrentDef(currBuff, buffname, curline)
 python << EOF
 import vim
@@ -68,40 +75,47 @@ EOF
 endfunction
 
 function! Def_complete()
+    "make all path absolute
+    "currBuff is the location of the current file
     let currBuff = bufname("%")
-    let buffname = ""
-    if match(currBuff,".cpp") >= 0
-        let buffname = substitute(currBuff,".cpp",".h","")
-    elseif match(currBuff,".h") >= 0
-        let buffname = currBuff[:len(currBuff) - 3]
+    "the path of the current buffer
+    let currBuff_path = fnamemodify(currBuff,":p:h")
+    "the name of the buffer
+    let currBuff_name = fnamemodify(currBuff,":t")
+    let currBuff_ex = fnamemodify(currBuff,":t:e")
+    "dir/file.x ==> file.x ==> file
+    let buffname = fnamemodify(currBuff,":t:r")
+    if fnamemodify(currBuff,":e") == "cpp"
+        let buffname = buffname.".h"
+    elseif fnamemodify(currBuff,":e") == "h"
         let buffname = buffname.".cpp"
-    elseif match(currBuff, ".hpp") >= 0
-        let buffname = substitute(currBuff,".hpp",".cpp","")
+    elseif fnamemodify(currBuff,":e") == "hpp"
+        let buffname = buffname. ".cpp"
     else
         return -1
     endif
-    let splitpath = split(buffname,"/")
-    let buff = splitpath[len(splitpath) -1]
-    let path = splitpath[:len(splitpath) - 2]
-    let abs_path = ""
-    for fold in path
-        let abs_path = abs_path . "/" . fold
-    endfor
-    let file = 0
-    if len(splitpath) > 1
-        let file = globpath(abs_path,buff,'\n')
-    else
-        let file = globpath(".",buff,'\n')
-    endif
+    let abs_buffname = currBuff_path ."/".buffname
 
-    if len(file) >= 1
-        echo "go here"
-        let curline = getline(".")
-        if bufname(buffname) == buffname
-            call SetCurrentDef(currBuff, buffname, curline) 
+    let file = split(globpath(currBuff_path,buffname))
+    if len(file) <= 0
+        "go back to project's root dir
+        let project_root = fnamemodify(currBuff_path,":h")
+        if currBuff_ex == "h" 
+            let file = split(globpath(project_root."/". g:cproto_src_path, buffname))
+            let abs_buffname = project_root."/".g:cproto_src_path ."/".buffname
         else
-            call SetCurrentDef(currBuff, buffname, curline)
-            execute ":e ".buffname
+            let file = split(globpath(project_root."/". g:cproto_headers_path, buffname))
+            let abs_buffname = project_root."/".g:cproto_headers_path ."/".buffname
+        endif
+    endif
+    echo abs_buffname
+    if len(file) >= 1
+        let curline = getline(".")
+        if bufname(abs_buffname) == abs_buffname
+            call SetCurrentDef(currBuff, abs_buffname, curline) 
+        else
+            call SetCurrentDef(currBuff, abs_buffname, curline)
+            execute ":e " abs_buffname
         endif
     else
         echo buffname." doesn't exist"
@@ -111,25 +125,43 @@ endfunction
 function! WriteClass(class_name, impl_name)
 python << Endpython
 import vim
-class_name = vim.eval("a:class_name")
+class_name_abs = vim.eval("a:class_name")
+class_name = vim.eval("fnamemodify(a:class_name,':t')")
 class_no_ex = class_name.split(".")[0]
 impl_name = vim.eval("a:impl_name")
-class_open = open(class_name, "w")
+class_open = open(class_name_abs, "w")
 impl_open = open(impl_name, "w")
 impl_open.write('#include "{}"\n'.format(class_name))
 class_open.write('class {}'.format(class_no_ex) + "{\n" + 'public:\n    {}();\n'.format(class_no_ex))
 class_open.write('private:\n};')
-
 class_open.close()
 impl_open.close()
 Endpython
 endfunction
-
-function! GenerateClass(class_name)
-    let file = globpath('.',a:class_name,'\n')
-    if len(file) <= 0
-        let impl_name = substitute(a:class_name,".h",".cpp","") 
-        execute "!touch ".a:class_name." ".impl_name
-        call WriteClass(a:class_name, impl_name)
+function! GenerateClass(class_name, option)
+    if a:option > 2
+        return
+    endif
+    let header_file_path = fnamemodify(a:class_name,":h")
+    let header_name = fnamemodify(a:class_name,":t")
+    let file = []
+    if a:option == 1
+        let file = split(globpath(header_file_path ."/".g:cproto_headers_path,header_name,'\n'))
+    else
+        let file = split(globpath(header_file_path,header_name,'\n'))
+    endif
+    if len(file) == 0
+        let impl_name = fnamemodify(header_name,":r").".cpp"
+        if a:option == 1
+            let header_file_name = header_file_path ."/". g:cproto_headers_path ."/" .header_name
+            let src_file_name = header_file_path. "/".g:cproto_src_path."/".impl_name
+            execute "!touch ".header_file_name " ".src_file_name
+            call WriteClass(header_file_name, src_file_name)
+        else
+            let header_file_name = header_file_path. "/" .header_name 
+            let src_file_name = header_file_path . "/" .impl_name
+            execute "!touch ".header_file_name ." ".src_file_name
+            call WriteClass(header_file_name, src_file_name)
+        endif
     endif
 endfunction
