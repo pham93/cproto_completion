@@ -6,6 +6,8 @@ At the moment, this plugin only works on Linux. I have not try it on Windows or 
 ##Installation##
 Install using `pathogen` is recommended.
 ```
+ddd
 cd ~/.vim/bundle &&
 git clone https://github.com/pham93/cproto_completion
 ```
+gggjkkkkk
